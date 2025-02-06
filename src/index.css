@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    @apply bg-gray-300;
+}
+
+#root {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    height: 1px;
+}
+
+
+.button {
+    @apply px-2 rounded py-1 bg-blue-500 hover:bg-blue-600 text-white self-center;
+}
+
+.menubar > a {
+    @apply hover:text-gray-600
+}
+
+.active {
+    @apply underline
+}
+
+input {
+    @apply p-2 border border-gray-300 focus:border-black
+}
