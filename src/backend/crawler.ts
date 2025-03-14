@@ -1,10 +1,53 @@
 import puppeteer from 'puppeteer';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-// import Verifier from "src/types/email-verifier";
-// const verifier = new Verifier();
+import * as fs from 'fs';
+import * as path from 'path';
+import csv from 'csv-parser';
+import { writeToPath } from 'fast-csv';
 
 const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+
+interface Company {
+    companyName: string;
+    city: string;
+    boardMember: string;
+}
+
+interface CrawledCompany {
+    companyName: string;
+    city: string;
+    boardMember: string;
+    Emails: string[];
+    GeneratedEmail: string;
+    exists: string;
+}
+
+function readCSV(filePath: string): Promise<Company[]> {
+    return new Promise((resolve, reject) => {
+        const results: Company[] = [];
+
+        fs.createReadStream(filePath)
+            .pipe(csv())
+            .on('data', (data: Company) => results.push(data))
+            .on('end', () => resolve(results))
+            .on('error', (error) => reject(error));
+    });
+}
+
+async function writeCSV(filePath: string, data: CrawledCompany[]): Promise<void> {
+    return new Promise((resolve, reject) => {
+        writeToPath(filePath, data, { headers: true, quoteColumns: true })
+            .on('finish', () => {
+                console.log(`CSV-Datei wurde erfolgreich erstellt: ${filePath}`);
+                resolve();
+            })
+            .on('error', (error) => {
+                console.error('Fehler beim Schreiben der CSV-Datei:', error);
+                reject(error);
+            });
+    });
+}
 
 function filterEmailsByQuery(emails: string[], query: string): string[] {
     const queryWords = query.toLowerCase().split(/\s+/); // Zerlege den Suchbegriff in Wörter
@@ -19,7 +62,7 @@ function filterEmailsByQuery(emails: string[], query: string): string[] {
     });
 }
 
-async function scrapeEmails(query: string): Promise<string[]> {
+export async function scrapeEmails(query: string): Promise<string[]> {
     const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
 
@@ -51,8 +94,7 @@ async function scrapeEmails(query: string): Promise<string[]> {
                     emails.forEach((email) => allEmails.add(email));
                 }
             } catch (error) {
-                // @ts-ignore
-                console.error(`Fehler beim Öffnen der Seite ${link}:`, error.message);
+                console.error(`Fehler beim Öffnen der Seite ${link}:`, error);
             }
         }
         return filterEmailsByQuery(Array.from(allEmails), query);
@@ -61,14 +103,14 @@ async function scrapeEmails(query: string): Promise<string[]> {
     }
 }
 
-function generateEmail(name: string, emails: string[]): string {
+export function generateEmail(name: string, emails: string[]): string {
     // Funktion zur Ersetzung von Umlauten
     function replaceUmlauts(str: string): string {
         return str.replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss");
     }
 
     // Extrahiere die Domain aus der ersten E-Mail-Adresse
-    const domain = emails.length > 0 ? emails[0].split("@")[1] : "ssv-reutlingen.de";
+    const domain = emails.length > 0 ? emails[0].split("@")[1] : "no-valid-email.de";
     let nameParts = name.toLowerCase().split(" ");
     nameParts = nameParts.map(replaceUmlauts);
 
@@ -88,7 +130,7 @@ function generateEmail(name: string, emails: string[]): string {
     return `${nameParts.join(".")}@${domain}`;
 }
 
-async function validateEmail(email: string): Promise<boolean> {
+export async function validateEmail(email: string): Promise<boolean> {
     const browser = await puppeteer.launch({ headless: true }); // Headless-Modus für automatisierte Ausführung
     const page = await browser.newPage();
 
@@ -128,29 +170,60 @@ async function validateEmail(email: string): Promise<boolean> {
 }
 
 // Hauptfunktion
-(async () => {
-    const start = performance.now();
-    const query = 'Jet Reutlingen'; // Beispiel-Suchanfrage
-    console.log("Start scraping for: " + query);
-    const emails = await scrapeEmails(query);
-
-    console.log('Gefundene E-Mail-Adressen:', emails);
-
-    // emails.push('deineMudder@gibssssssehned.com','sam.voehringer@gmx.de','s.voehringer@wafios.de')
-    emails.push('deineMudder@gibssssssehned.com')
-    emails.push("test@exämple.com");
-
-    console.log('Checke auf Gültigkeit:');
-    for (const email of emails) {
-        const isValid = await validateEmail(email);
-        console.log(`${email}: ${isValid ? 'gültig' : 'ungültig'}`);
-    }
-    const end = performance.now();
-    console.log(`Dauer für crawlen: ${((end - start)/1000).toFixed(2)} sec`);
-
-    console.log('Generiere personalisierte E-Mail-Adressen:');
-    let generatedEmailAdress = generateEmail("Sam Vöhringer", emails);
-    const isValid = await validateEmail(generatedEmailAdress);
-
-    console.log(`${generatedEmailAdress}: ${isValid ? 'gültig' : 'ungültig'}`);
-})();
+// (async () => {
+//     const csvFilePath = path.join(__dirname, 'files/daten.csv');
+//
+//     let csvData: Company[];
+//     const crawledData: CrawledCompany[] = [];
+//
+//     try {
+//         csvData = await readCSV(csvFilePath);
+//         console.log('CSV-Daten erfolgreich geladen:', csvData);
+//
+//         for (const company of csvData) {
+//             const start = performance.now();
+//
+//             const query = company.companyName + " " + company.city;
+//             console.log("Start scraping for: " + query);
+//             const emails = await scrapeEmails(query);
+//             const validEmails = [];
+//
+//             console.log('Gefundene E-Mail-Adressen:', emails);
+//
+//             console.log('Checke auf Gültigkeit:');
+//             for (const email of emails) {
+//                 const isValid = await validateEmail(email);
+//                 console.log(`${email}: ${isValid ? 'gültig' : 'ungültig'}`);
+//                 if (isValid) {
+//                     validEmails.push(email);
+//                 }
+//             }
+//             const end = performance.now();
+//             console.log(`Dauer für crawlen: ${((end - start) / 1000).toFixed(2)} sec`);
+//
+//             console.log('Generiere personalisierte E-Mail-Adresse:');
+//             const generatedEmailAddress = generateEmail(company.boardMember, validEmails);
+//             const isValid = await validateEmail(generatedEmailAddress);
+//
+//             console.log(`${generatedEmailAddress}: ${isValid ? 'gültig' : 'ungültig'}`);
+//
+//             const crawledCompany: CrawledCompany = {
+//                 companyName: company.companyName,
+//                 city: company.city,
+//                 boardMember: company.boardMember,
+//                 Emails: validEmails,
+//                 GeneratedEmail: generatedEmailAddress,
+//                 exists: isValid ? 'Existiert vermutlich' : 'Existiert nicht'
+//             };
+//
+//             crawledData.push(crawledCompany);
+//         }
+//     } catch (error) {
+//         console.error('Fehler beim Einlesen der CSV-Datei:', error);
+//     }
+//
+//     Speichern der CSV-Datei
+// const csvOutputFilePath = path.join(__dirname, 'files/firmen_output.csv');
+//
+// await writeCSV(csvOutputFilePath, crawledData);
+// })();
