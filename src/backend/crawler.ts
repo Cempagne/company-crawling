@@ -2,7 +2,7 @@ import puppeteer from 'puppeteer';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import * as fs from 'fs';
-import * as path from 'path';
+// import * as path from 'path';
 import csv from 'csv-parser';
 import { writeToPath } from 'fast-csv';
 
